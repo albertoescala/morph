@@ -57,8 +57,6 @@ export default (state, getImport) => {
           ? `G as SvgGroup`
           : `${d.replace('Svg', '')} as ${d}`
       )
-    } else if (d.endsWith('SvgInline')) {
-      dependencies.push(`import ${d} from "./${d}.view.js"`)
     } else if (d === 'Table') {
     } else if (/^[A-Z]/.test(d)) {
       dependencies.push(getImport(d, state.lazy[d]))
@@ -66,16 +64,12 @@ export default (state, getImport) => {
   })
 
   if (state.isReactNative) {
-    state.getFont(state.fonts)
+    // TODO fonts in RN
+    // state.getFont(state.fonts)
   } else {
-    dependencies.push(getImport('ViewsBaseCss'))
-
-    state.fonts.forEach(usedFont => {
-      let font = state.getFont(usedFont)
-      if (font) {
-        dependencies.push(`import "${font}"`)
-      }
-    })
+    state.fonts.forEach(usedFont =>
+      dependencies.push(state.getFontImport(usedFont.id))
+    )
   }
 
   // TODO we probably want to check that the file exists and do something if it
@@ -94,12 +88,12 @@ export default (state, getImport) => {
       'animated',
       (state.hasSpringAnimation ||
         (state.hasTimingAnimation && state.isReactNative)) &&
-        'Spring',
+        'useSpring',
     ].filter(Boolean)
 
     if (animations.length > 0) {
       dependencies.push(
-        `import { ${animations.join(', ')} } from "react-spring/renderprops"`
+        `import { ${animations.join(', ')} } from "react-spring"`
       )
 
       state.dependencies.add('react-spring')
@@ -137,6 +131,14 @@ export default (state, getImport) => {
 
   if (state.track) {
     dependencies.push(getImport('TrackContext'))
+  }
+
+  if (state.useIsBefore) {
+    dependencies.push(getImport('ViewsUseIsBefore'))
+  }
+
+  if (state.useIsMedia) {
+    dependencies.push(getImport('ViewsUseIsMedia'))
   }
 
   if (Object.keys(state.locals).length > 0) {

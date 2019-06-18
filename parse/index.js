@@ -1,6 +1,6 @@
 import {
   CAPTURE_TYPES,
-  didYouMeanBlock,
+  makeDidYouMeanBlock,
   didYouMeanProp,
   getAnimation,
   getBlock,
@@ -23,18 +23,26 @@ import {
   isLocalScope,
   isSystemScope,
   isUserComment,
+  makeDidYouMeanFontFamily,
 } from './helpers.js'
+import { isGoogleFont } from '../morph/fonts.js'
 import getLoc from './get-loc.js'
 import getTags from './get-tags.js'
+import path from 'path'
 
 export default ({
   convertSlotToProps = true,
+  customFonts,
   enableLocalScopes = true,
   enableSystemScopes = true,
+  file,
+  id,
   skipComments = true,
   skipInvalidProps = true,
   source,
-} = {}) => {
+  src,
+  views,
+}) => {
   // convert crlf to lf
   let text = source.replace(/\r\n/g, '\n')
   let rlines = text.split('\n')
@@ -43,8 +51,16 @@ export default ({
   let locals = []
   let stack = []
   let slots = []
-  let views = []
+  let useIsBefore = false
+  let useIsMedia = false
+  let view = null
+  let viewsInView = new Set()
   let warnings = []
+
+  let didYouMeanBlock = makeDidYouMeanBlock([...views.keys()])
+  let didYouMeanFontFamily = makeDidYouMeanFontFamily(
+    [...customFonts.keys()].map(id => id.split('-')[0])
+  )
 
   let blockIds = []
   let getBlockId = node => {
@@ -79,35 +95,49 @@ export default ({
   let lookForFonts = block => {
     if (block.properties && (isFontable(block.name) || !block.isBasic)) {
       let fontFamilyProp = block.properties.find(p => p.name === 'fontFamily')
+      if (!fontFamilyProp) return
 
-      if (fontFamilyProp) {
-        let fontFamily = fontFamilyProp.value
-        let fontWeightProp = block.properties.find(p => p.name === 'fontWeight')
-        let fontStyleProp = block.properties.find(p => p.name === 'fontStyle')
-        let fontWeight = fontWeightProp
-          ? fontWeightProp.value.toString()
-          : '400'
+      let family = fontFamilyProp.value
 
-        let fontStyle = fontStyleProp
-          ? fontStyleProp.value.toString()
-          : 'normal'
+      let fontWeightProp = block.properties.find(p => p.name === 'fontWeight')
+      let weight = fontWeightProp ? fontWeightProp.value.toString() : '400'
 
-        if (
-          !fonts.find(
-            font =>
-              font.family === fontFamily &&
-              font.weight === fontWeight &&
-              font.style === fontStyle
-          )
-        ) {
-          fonts.push({
-            id: `${fontFamily}-${fontWeight}${
-              fontStyle === 'italic' ? '-italic' : ''
-            }`,
-            family: fontFamily,
-            weight: fontWeight,
-            style: fontStyle,
-          })
+      let fontStyleProp = block.properties.find(p => p.name === 'fontStyle')
+      let style = fontStyleProp ? fontStyleProp.value.toString() : 'normal'
+
+      if (
+        !fonts.find(
+          font =>
+            font.family === family &&
+            font.weight === weight &&
+            font.style === style
+        )
+      ) {
+        let font = {
+          id: `${family}-${weight}${style === 'italic' ? '-italic' : ''}`,
+          isGoogleFont: isGoogleFont(family),
+          family,
+          weight,
+          style,
+        }
+
+        if (font.isGoogleFont || customFonts.has(font.id)) {
+          fonts.push(font)
+        } else {
+          let meant = didYouMeanFontFamily(family)
+          if (meant && meant !== family) {
+            warnings.push({
+              loc: fontFamilyProp.loc,
+              type: `The font "${family}" is missing. Did you mean "${meant}" instead?\nIf not, download the font files (eg, "${font.id}.woff2", "${font.id}.woff", "${font.id}.ttf", etc) and add the to the "Fonts" folder.`,
+              line: lines[fontFamilyProp.loc.start.line - 1],
+            })
+          } else {
+            warnings.push({
+              loc: fontFamilyProp.loc,
+              type: `The font "${family}" is missing.\nDownload the font files (eg, "${font.id}.woff2", "${font.id}.woff", "${font.id}.ttf", etc) and add the to the "Fonts" folder.`,
+              line: lines[fontFamilyProp.loc.start.line - 1],
+            })
+          }
         }
       }
     }
@@ -163,7 +193,7 @@ export default ({
 
     if (stack.length === 0) {
       // if we're the last block on the stack, then this is the view!
-      views.push(block)
+      view = block
       return true
     }
     return false
@@ -189,15 +219,36 @@ export default ({
       scopes: [],
     }
 
-    if (is && !block.isBasic) {
-      let meant = didYouMeanBlock(name)
-      if (meant && meant !== name) {
+    let meant = didYouMeanBlock(name)
+    if (meant) {
+      if (meant !== name) {
         warnings.push({
           loc: block.loc,
-          type: `Did you mean "${meant}" instead of "${name}"?`,
+          type: `"${name}" doesn't exist and won't be morphed. Did you mean "${meant}" instead of "${name}"?`,
           line,
         })
+        block.skip = true
       }
+    } else {
+      warnings.push({
+        loc: block.loc,
+        type: `"${name}" doesn't exist and won't be morphed.\nCreate the view or rename the block to point to the right view.`,
+        line,
+      })
+      block.skip = true
+    }
+
+    if (id === name) {
+      warnings.push({
+        loc: block.loc,
+        type: `Is this a typo? You can't use the view within itself.\nRename the view or use a different block instead of ${name} here. This won't be morphed to avoid loops.`,
+        line,
+      })
+      block.skip = true
+    }
+
+    if (!block.isBasic) {
+      viewsInView.add(block.name)
     }
 
     if (is) {
@@ -219,18 +270,14 @@ export default ({
           if (block.isBasic) {
             warnings.push({
               loc: block.loc,
-              type: `A basic block "${
-                block.name
-              }" can't be inside a List. Use a view you made instead.`,
+              type: `A basic block "${block.name}" can't be inside a List. Use a view you made instead.`,
               line,
               blocker: true,
             })
           } else if (last.children.length > 0) {
             warnings.push({
               loc: block.loc,
-              type: `A List can only have one view inside. "${
-                block.name
-              }" is outside of it. Put 1 empty line before.`,
+              type: `A List can only have one view inside. "${block.name}" is outside of it. Put 1 empty line before.`,
               line,
             })
           } else {
@@ -246,9 +293,7 @@ export default ({
           if (block.isBasic) {
             warnings.push({
               loc: block.loc,
-              type: `A basic block "${
-                block.name
-              }" cant' be inside a View. Use a view you made instead.`,
+              type: `A basic block "${block.name}" cant' be inside a View. Use a view you made instead.`,
               line,
               blocker: true,
             })
@@ -264,9 +309,7 @@ ${block.name}
 
 You should replace "${block.name}" with "SomeView ${block.name}"
 
-That would mean that SomeView in ${block.name} will be replaced by ${
-                  block.name
-                }.`,
+That would mean that SomeView in ${block.name} will be replaced by ${block.name}.`,
               })
             }
             last.children.push(block)
@@ -296,7 +339,7 @@ That would mean that SomeView in ${block.name} will be replaced by ${
           })
         }
       }
-    } else if (views.length > 0) {
+    } else if (view !== null) {
       warnings.push({
         loc: block.loc,
         type: `${block.is ||
@@ -310,6 +353,23 @@ That would mean that SomeView in ${block.name} will be replaced by ${
       block.isList = isList(name)
       block.isTable = isTable(name)
       block.children = []
+    }
+
+    if (block.isBasic && block.name === 'View') {
+      block.isFragment = true
+      if (stack.length > 0) {
+        warnings.push({
+          type: `A view can only have one View block. Maybe you want to split this block into another view?`,
+          line,
+          loc: block.loc,
+        })
+      }
+    } else if (stack.length === 0) {
+      warnings.push({
+        type: `A view must start with a View block. ${block.name} isn't valid.\nWrap everything within a View block at the top.`,
+        line,
+        loc: block.loc,
+      })
     }
 
     if (shouldPushToStack || stack.length === 0) {
@@ -468,10 +528,23 @@ That would mean that SomeView in ${block.name} will be replaced by ${
           }
 
           if (convertSlotToProps) {
-            scope.value =
-              isSystem || isLocal
-                ? slotName
-                : `${slotIsNot ? '!' : ''}props.${slotName || name}`
+            scope.value = slotName
+
+            if (slotName === 'isBefore') {
+              useIsBefore = true
+            } else if (
+              slotName === 'isMediaMobile' ||
+              slotName === 'isMediaTablet' ||
+              slotName === 'isMediaLaptop' ||
+              slotName === 'isMediaDesktop'
+            ) {
+              scope.value = `isMedia.${slotName
+                .replace('isMedia', '')
+                .toLowerCase()}`
+              useIsMedia = true
+            } else if (!isSystem && !isLocal) {
+              scope.value = `${slotIsNot ? '!' : ''}props.${slotName || name}`
+            }
           }
 
           scopes.push(scope)
@@ -585,7 +658,11 @@ That would mean that SomeView in ${block.name} will be replaced by ${
               } else {
                 propNode.defaultValue = false
 
-                if (block.isBasic) {
+                if (
+                  block.isBasic &&
+                  (propNode.tags.style ||
+                    (block.name === 'Text' && propNode.name === 'text'))
+                ) {
                   warnings.push({
                     loc,
                     type: `Add a default value to "${name}" like: "${name} <${slotName} default value"`,
@@ -635,9 +712,7 @@ That would mean that SomeView in ${block.name} will be replaced by ${
           ) {
             warnings.push({
               loc: propNode.loc,
-              type: `You're missing a base prop for ${
-                propNode.name
-              }. Add it before all whens on the block.`,
+              type: `You're missing a base prop for ${propNode.name}. Add it before all whens on the block.`,
               line,
             })
           }
@@ -652,7 +727,7 @@ That would mean that SomeView in ${block.name} will be replaced by ${
     block.properties = properties
     block.scopes = scopes
 
-    if (block.isFragment) {
+    if (block.name !== 'View' && block.isFragment) {
       let invalidProps = properties
         .filter(prop => prop.name !== 'isFragment' || prop.name !== 'onWhen')
         .map(prop => prop.name)
@@ -691,16 +766,50 @@ That would mean that SomeView in ${block.name} will be replaced by ${
     while (!end(stack.pop(), lines.length - 1)) {}
   }
 
-  // if (source.startsWith('Action Vertical')) {
-  //   console.log('ACTION VERTICAL ->>>>>')
-  // console.log(JSON.stringify(views, null, '  '))
-  // }
+  if (!view) {
+    view = {
+      type: 'Block',
+      name: id,
+      animations: {},
+      isAnimated: false,
+      isBasic: true,
+      isCapture: false,
+      isColumn: false,
+      isGroup: false,
+      isProxy: false,
+      level: 0,
+      loc: getLoc(1, 0),
+      properties: [],
+      scopes: [],
+    }
+
+    warnings.push({
+      loc: view.loc,
+      type: `The view file for ${id} is empty and won't render! Add some blocks to it like:\nView\n  Text\n    text content`,
+      line: '',
+    })
+  }
+
+  let flowProp = view.properties.find(p => p.name === 'flow')
+  if (flowProp) {
+    view.isStory = true
+    view.flow = flowProp.value
+    view.pathToStory = file
+      .replace(path.join(src, 'Stories'), '')
+      .replace('.view', '')
+  } else {
+    view.isStory = false
+  }
+
+  view.useIsBefore = useIsBefore
+  view.useIsMedia = useIsMedia
+  view.views = viewsInView
 
   return {
     fonts,
     locals,
     slots,
-    views,
+    view,
     warnings,
   }
 }

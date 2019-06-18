@@ -6,8 +6,7 @@ export default ({ state, name }) => {
     render = `<Subscribe to={[LocalContainer]}>\n{local =>\n${render}\n}</Subscribe>`
   }
 
-  let animatedOpen = []
-  let animatedClose = []
+  let animated = []
   if (state.isAnimated) {
     Object.keys(state.animations).forEach(blockId => {
       Object.values(state.animations[blockId]).forEach(item => {
@@ -15,63 +14,84 @@ export default ({ state, name }) => {
 
         if (!state.isReactNative && curve !== 'spring') return
 
-        let config = `config={${JSON.stringify(configValues)}}`
+        let spring = ['{', '"config": {']
+        Object.entries(configValues).forEach(([k, v]) => {
+          spring.push(`${k}: ${JSON.stringify(v)},`)
+        })
 
         if (curve !== 'spring' && curve !== 'linear') {
-          config = `easing={Easing.${curve.replace(
-            'ease',
-            'easeCubic'
-          )}} ${config}`
+          spring.push(`"easing": Easing.${curve.replace('ease', 'easeCubic')},`)
         }
+        spring.push('},')
 
-        let to = Object.values(item.props)
-          .map(prop => {
-            prop.scopes.reverse()
+        let toValue = []
+        let fromValue = []
+        Object.values(item.props).forEach(prop => {
+          prop.scopes.reverse()
 
-            let value = prop.scopes.reduce(
-              (current, scope) =>
-                `props.${scope.name}? ${JSON.stringify(
-                  scope.value
-                )} : ${current}`,
-              JSON.stringify(prop.value)
-            )
+          let value = prop.scopes.reduce(
+            (current, scope) =>
+              `props.${scope.name}? ${JSON.stringify(
+                scope.value
+              )} : ${current}`,
+            JSON.stringify(prop.value)
+          )
 
-            let unit = getUnit(prop)
-            if (!state.isReactNative && unit) {
-              value = `\`$\{${value}}${unit}\``
-            }
+          let unit = getUnit(prop)
+          if (!state.isReactNative && unit) {
+            value = `\`$\{${value}}${unit}\``
+          }
 
-            return `${JSON.stringify(prop.name)}: ${value}`
-          })
-          .join(',')
+          toValue.push(`${JSON.stringify(prop.name)}: ${value}`)
 
-        animatedOpen.push(
-          `<Spring native ${config} to={{${to}}}>{animated${blockId}${
+          let firstScopeValue = JSON.stringify(prop.scopes[0].value)
+          if (!state.isReactNative && unit) {
+            firstScopeValue = `\`$\{${firstScopeValue}}${unit}\``
+          }
+          fromValue.push(`${JSON.stringify(prop.name)}: ${firstScopeValue}`)
+        })
+
+        spring.push(`"from": {${fromValue.join(',')}},`)
+        spring.push(`"to": {${toValue.join(',')}},`)
+        spring.push('}')
+
+        animated.push(
+          `let animated${blockId}${
             item.index > 0 ? item.index : ''
-          } => (`
+          } = useSpring(${spring.join('\n')})`
         )
-
-        animatedClose.push(`)}</Spring>`)
       })
     })
   }
 
-  if (state.hasRefs || state.isAnimated) {
-    animatedOpen = animatedOpen.join('')
-    animatedClose = animatedClose.reverse().join('')
+  let flow = []
+  if (state.flow === 'separate') {
+    flow.push(`let flow = fromFlow.useFlow()`)
+  }
+  if (state.setFlow) {
+    flow.push(`let setFlow = fromFlow.useSetFlow()`)
+  }
 
+  if (state.hasRefs) {
     let trackOpen = state.track ? '<TrackContext.Consumer>{track => (' : ''
     let trackClose = state.track ? ')}</TrackContext.Consumer>' : ''
     return `class ${name} extends React.Component {
   render() {
     let { props } = this
-    return (${trackOpen}${animatedOpen}${render}${animatedClose}${trackClose})
+    return (${trackOpen}${render}${trackClose})
   }
 }`
   } else {
+    let ret = render ? `(${render})` : null
+
     return `let ${name} = (props) => {
     ${state.track ? `let track = React.useContext(TrackContext)` : ''}
-  return (${render})
+    ${state.useIsBefore ? 'let isBefore = useIsBefore()' : ''}
+    ${state.useIsMedia ? 'let isMedia = useIsMedia()' : ''}
+    ${animated.join('\n')}
+    ${flow.join('\n')}
+
+  return ${ret}
 }`
   }
 }

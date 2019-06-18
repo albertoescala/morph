@@ -1,4 +1,5 @@
 import { isRowStyle, isStyle, STYLE } from './prop-is-style.js'
+import { fontFamily as googleFontFamilies } from '../morph/fonts.js'
 import DidYouMeanMatcher from './did-you-mean.js'
 import isNumber from './prop-is-number.js'
 import locales from 'i18n-locales'
@@ -6,36 +7,22 @@ import toSlugCase from 'to-slug-case'
 
 let LOCAL_SCOPES = locales.map(item => item.replace(/-/g, ''))
 
-let dymBlockMatcher = new DidYouMeanMatcher(
-  'Capture|CaptureTextArea|G|Horizontal|Image|List|Svg|SvgCircle|SvgEllipse|SvgDefs|SvgGroup|SvgLinearGradient|SvgRadialGradient|SvgLine|SvgPath|SvgPolygon|SvgPolyline|SvgRect|SvgSymbol|SvgText|SvgUse|SvgStop|Text|Vertical'.split(
-    '|'
-  )
-)
 let dymPropMatcher = new DidYouMeanMatcher([
   ...STYLE,
-  'defaultValue',
-  'type',
-  'fill',
-  'stroke',
-  'from',
-  'key',
-  'viewBox',
-  'stroke',
-  'strokeWidth',
-  'strokeLinecap',
-  'strokeMiterlimit',
   'at',
-  'd',
-  'x',
+  'className',
   'cx',
   'cy',
-  'r',
-  'x1',
-  'y1',
-  'y',
-  'x2',
-  'y2',
-  'strokeLinejoin',
+  'd',
+  'data',
+  'defaultValue',
+  'fill',
+  'flow',
+  'from',
+  'id',
+  'key',
+  'key',
+  'maxLength',
   'onBlur',
   'onChange',
   'onClick',
@@ -61,23 +48,51 @@ let dymPropMatcher = new DidYouMeanMatcher([
   'onMouseUp',
   'onWheel',
   'onWhen',
+  'r',
   'ref',
+  'rx',
+  'ry',
+  'step',
+  'stroke',
+  'stroke',
+  'strokeLinecap',
+  'strokeLinejoin',
+  'strokeMiterlimit',
+  'strokeWidth',
   'tabIndex',
   'text',
+  'type',
   'value',
+  'viewBox',
   'when',
-  'key',
-  'maxLength',
-  'step',
-  'id',
-  'className',
+  'x',
+  'x1',
+  'x2',
+  'y',
+  'y1',
+  'y2',
 ])
 
-export let didYouMeanBlock = block => dymBlockMatcher.get(block)
+export let makeDidYouMeanBlock = views => {
+  let dymBlockMatcher = new DidYouMeanMatcher(
+    'Capture|CaptureTextArea|Horizontal|Image|List|Svg|SvgCircle|SvgEllipse|SvgDefs|SvgGroup|SvgLinearGradient|SvgRadialGradient|SvgLine|SvgPath|SvgPolygon|SvgPolyline|SvgRect|SvgSymbol|SvgText|SvgUse|SvgStop|Text|View|Vertical'
+      .split('|')
+      .concat(views)
+  )
+  return block => dymBlockMatcher.get(block)
+}
+
 export let didYouMeanProp = prop => dymPropMatcher.get(prop)
 
+export let makeDidYouMeanFontFamily = customFonts => {
+  let dymFontFamilyMatcher = new DidYouMeanMatcher(
+    googleFontFamilies.concat(customFonts)
+  )
+  return family => dymFontFamilyMatcher.get(family)
+}
+
 let ANIMATION = /(.+)(?:\s)(spring|linear|easeOut|easeInOut|easeIn|ease)(?:\s?(.*)?)/
-let BASIC = /^(Capture|CaptureTextArea|Column|Horizontal|Image|List|Svg|SvgCircle|SvgEllipse|SvgDefs|SvgGroup|SvgLinearGradient|SvgRadialGradient|SvgLine|SvgPath|SvgPolygon|SvgPolyline|SvgRect|SvgSymbol|SvgText|SvgUse|SvgStop|Table|Text|Vertical)$/i
+let BASIC = /^(Capture|CaptureTextArea|Column|Horizontal|Image|List|Svg|SvgCircle|SvgEllipse|SvgDefs|SvgGroup|SvgLinearGradient|SvgRadialGradient|SvgLine|SvgPath|SvgPolygon|SvgPolyline|SvgRect|SvgSymbol|SvgText|SvgUse|SvgStop|Table|Text|View|Vertical)$/i
 let BLOCK = /^(\s*)([A-Z][a-zA-Z0-9]*)(\s+([A-Z][a-zA-Z0-9]*))?$/
 let BOOL = /^(false|true)$/i
 let CAPTURE = /^(Capture|CaptureTextArea)$/i

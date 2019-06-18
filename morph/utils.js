@@ -63,6 +63,10 @@ export let getProp = (node, key) => {
   return node.properties && node.properties.find(finder)
 }
 
+export let getPropValueOrDefault = (node, key, defaultValue) => {
+  return hasProp(node, key) ? getProp(node, key).value : defaultValue
+}
+
 export let getScope = node => node.value.split('when ')[1]
 
 let maybeSafe = node =>
@@ -184,7 +188,9 @@ export let hasDefaultProp = (node, parent) =>
   parent.properties.some(prop => prop.nameRaw === node.nameRaw)
 
 export let isSlot = node =>
-  typeof node === 'string' ? /props/.test(node) : isTag(node, 'slot')
+  typeof node === 'string'
+    ? /(props|isBefore|isMedia\.)/.test(node)
+    : isTag(node, 'slot')
 export let isStyle = node => isTag(node, 'style')
 export let isRowStyle = node => isTag(node, 'rowStyle')
 export let isTag = (node, tag) => node && node.tags[tag]
@@ -479,11 +485,6 @@ let TRANSFORM_WHITELIST = {
 export let canUseNativeDriver = name =>
   STYLES_WHITELIST[name] || TRANSFORM_WHITELIST[name] || false
 
-let fontsOrder = ['eot', 'woff2', 'woff', 'ttf', 'svg', 'otf']
-
-export let sortFonts = (a, b) =>
-  fontsOrder.indexOf(b.type) - fontsOrder.indexOf(a.type)
-
 export let createId = (node, state, addClassName = true) => {
   let id = node.is || node.name
   // count repeatead ones
@@ -570,3 +571,6 @@ export let maybeMakeHyphenated = ({ name, value }) =>
   MAYBE_HYPHENATED_STYLE_PROPS.includes(name) && /^[a-zA-Z]+$/.test(value)
     ? toSlugCase(value)
     : value
+
+export let isStory = (node, state) =>
+  !node.isBasic && state.isStory(node.name) && state.flow === 'separate'

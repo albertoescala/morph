@@ -2,6 +2,8 @@ import * as visitor from './react-native/block.js'
 import getStyleForProperty from './react-native/get-style-for-property.js'
 import getStyles from './react-native/get-styles.js'
 import getValueForProperty from './react-native/get-value-for-property.js'
+import getViewRelativeToView from '../get-view-relative-to-view.js'
+import makeGetImport from './react/make-get-import.js'
 import maybeUsesTextInput from './react-native/maybe-uses-text-input.js'
 import maybeUsesRouter from './react-native/maybe-uses-router.js'
 import maybeUsesStyleSheet from './react-native/maybe-uses-style-sheet.js'
@@ -17,15 +19,16 @@ let imports = {
 }
 
 export default ({
-  file,
-  getFont = () => false,
-  getImport,
+  getFontImport,
+  getSystemImport,
   local,
   localSupported,
-  name,
-  track = true,
-  views,
+  track,
+  view,
+  viewsById,
+  viewsToFiles,
 }) => {
+  let name = view.id
   let finalName = restrictedNames.includes(name) ? `${name}1` : name
   if (name !== finalName) {
     console.warn(
@@ -40,20 +43,32 @@ export default ({
     animated: new Set(),
     images: [],
     dependencies: new Set(),
-    getFont,
+    flow: null,
+    setFlow: false,
+    getFontImport: font => getFontImport(font, view),
     getStyleForProperty,
     getValueForProperty,
     hasRefs: false,
     isReactNative: true,
+    isStory: id => {
+      let viewInView = getViewRelativeToView({
+        id,
+        view,
+        viewsById,
+        viewsToFiles,
+      })
+
+      return !viewInView.custom && viewInView.parsed.view.isStory
+    },
     lazy: {},
     local,
     locals: {},
     localSupported: [],
     name: finalName,
+    pathToStory: view.parsed.view.pathToStory,
     remap: {},
     render: [],
     styles: {},
-    svgs: [],
     testIdKey: 'testID',
     testIds: {},
     track,
@@ -74,31 +89,37 @@ export default ({
 
       state.uses.push(block)
     },
+    useIsBefore: view.parsed.view.useIsBefore,
+    useIsMedia: view.parsed.view.useIsMedia,
   }
 
-  let parsed = views[name]
-  state.fonts = parsed.fonts
-  state.slots = parsed.slots
+  state.fonts = view.parsed.fonts
+  state.slots = view.parsed.slots
   state.localSupported = localSupported
 
-  walk(parsed.views[0], visitor, state)
+  walk(view.parsed.view, visitor, state)
 
   maybeUsesTextInput(state)
   maybeUsesRouter(state)
   maybeUsesStyleSheet(state)
-  let finalGetImport = (name, isLazy) =>
-    imports[name] || getImport(name, isLazy)
 
   return {
     code: toComponent({
-      getImport: finalGetImport,
+      getImport: makeGetImport({
+        imports,
+        getSystemImport,
+        view,
+        viewsById,
+        viewsToFiles,
+      }),
       getStyles,
       name: finalName,
       state,
     }),
     dependencies: state.dependencies,
-    fonts: parsed.fonts,
-    slots: parsed.slots,
-    svgs: state.svgs,
+    flow: state.flow,
+    flowDefaultState: state.flowDefaultState,
+    // fonts: view.parsed.fonts,
+    // slots: view.parsed.slots,
   }
 }

@@ -31,4 +31,5 @@ export default [
   'Text',
   'Timing',
   'Vertical',
+  'View',
 ]

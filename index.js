@@ -1,64 +1,22 @@
 import { basename, extname } from 'path'
-import buble from 'buble'
-import doMorph from './morphers.js'
-import doGetViewNotFound from './get-view-not-found.js'
-import morphFont from './morph/font.js'
+import {
+  getFilesView,
+  getFilesViewLogic,
+  getFilesViewCustom,
+  getFilesFontCustom,
+} from './get-files.js'
+import { processCustomFonts } from './fonts.js'
+import {
+  watchFilesView,
+  watchFilesViewLogic,
+  watchFilesViewCustom,
+  watchFilesFontCustom,
+} from './watch-files.js'
+import addToMapSet from './add-to-map-set.js'
+import getViewIdFromFile from './get-view-id-from-file.js'
+import makeProcessFiles from './process-files.js'
 import restrictedNames from './restricted-names.js'
 import toPascalCase from 'to-pascal-case'
-import prettier from 'prettier'
-import parse from './parse/index.js'
-
-let DEFAULT_IMPORT = name => `import ${name} from './${name}.view.js'`
-
-export let morph = ({
-  as,
-  compile,
-  enableAnimated,
-  file = {},
-  getFont,
-  getImport = DEFAULT_IMPORT,
-  local = 'en',
-  localSupported = [],
-  name,
-  pretty = false,
-  track = true,
-  views = {},
-}) => {
-  let morphed = doMorph[as]({
-    enableAnimated,
-    file,
-    getFont,
-    getImport,
-    local,
-    localSupported,
-    name,
-    track,
-    views,
-  })
-
-  if (compile) {
-    morphed.code = buble.transform(morphed.code, {
-      objectAssign: 'Object.assign',
-      transforms: {
-        modules: false,
-        templateString: false,
-      },
-    }).code
-  }
-
-  if (pretty) {
-    morphed.code = prettier.format(morphed.code, {
-      parser: 'babel',
-      singleQuote: true,
-      trailingComma: 'es5',
-    })
-  }
-
-  return morphed
-}
-
-export let getViewNotFound = (as, name, warning) =>
-  doGetViewNotFound[as](name, warning)
 
 let sanitize = input =>
   basename(input)
@@ -74,6 +32,17 @@ export let pathToName = path =>
 export let isViewNameRestricted = (view, as) =>
   restrictedNames[as].includes(view)
 
-export { morphFont }
-
-export { parse }
+export {
+  addToMapSet,
+  getFilesFontCustom,
+  getFilesView,
+  getFilesViewCustom,
+  getFilesViewLogic,
+  getViewIdFromFile,
+  makeProcessFiles,
+  processCustomFonts,
+  watchFilesFontCustom,
+  watchFilesView,
+  watchFilesViewCustom,
+  watchFilesViewLogic,
+}

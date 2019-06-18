@@ -1,28 +1,24 @@
-let glob = require('fast-glob')
-let fs = require('fs')
-let path = require('path')
+import { promises as fs } from 'fs'
+import deleteEmpty from 'delete-empty'
+import glob from 'fast-glob'
+import path from 'path'
 
-module.exports = async src => {
-  let options = {
+export default async function clean(src, verbose) {
+  let morphed = await glob(['**/*.view.js', `Fonts/*.js`, 'use-flow.js'], {
     bashNative: ['linux'],
     cwd: src,
     ignore: ['*node_modules*'],
-    // filter: f => !/node_modules/.test(f),
+  })
+
+  await Promise.all(
+    morphed.map(f => {
+      verbose && console.log(`x ${f}`)
+      return fs.unlink(path.join(src, f))
+    })
+  )
+
+  let deleted = await deleteEmpty(src)
+  if (verbose) {
+    deleted.forEach(d => console.log(`x ${d}`))
   }
-
-  let created = await glob(
-    ['**/*.view', '**/*.view.logic.js', '**/*.view.tests'],
-    options
-  )
-
-  let morphed = await glob(
-    ['**/*.view.css', '**/*.view.js', '**/*.view.tests.js'],
-    options
-  )
-
-  let toRemove = morphed.filter(
-    m => !created.includes(m.replace(/\.(js|css)$/, ''))
-  )
-
-  toRemove.forEach(f => fs.unlinkSync(path.join(src, f)))
 }

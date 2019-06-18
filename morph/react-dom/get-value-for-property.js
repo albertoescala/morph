@@ -1,7 +1,9 @@
 import {
+  getProp,
   getScopedCondition,
   getScopedImageCondition,
   getScopes,
+  hasProp,
   isValidImgSrc,
   makeOnClickTracker,
   pushImageToState,
@@ -66,10 +68,24 @@ export default (node, parent, state) => {
     return {
       [node.name]: safe(getScopedCondition(node, parent)),
     }
-  } else if (parent.isBasic && node.name === 'onClick' && state.track) {
-    return {
-      onClick: wrap(makeOnClickTracker(node, parent, state)),
+  } else if (node.name === 'onClick') {
+    let onClick = safe(node.value, node)
+
+    if (node.slotName === 'setFlow') {
+      if (hasProp(parent, 'onClickId')) {
+        onClick = `{() => setFlow("${getProp(parent, 'onClickId').value}")}`
+        state.use('ViewsUseFlow')
+        state.setFlow = true
+        // TODO warn if action is used but it isn't in actions (on parser)
+      } else {
+        // TODO warn that there's setFlow without an id (on parser)
+      }
+    } else if (state.track) {
+      // TODO merge flow with track
+      onClick = wrap(makeOnClickTracker(node, parent, state))
     }
+
+    return { onClick }
   } else {
     return {
       [node.name]: safe(node.value, node),

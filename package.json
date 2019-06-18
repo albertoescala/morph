@@ -1,8 +1,9 @@
 {
   "name": "@viewstools/morph",
-  "version": "18.2.0",
+  "version": "19.5.0",
   "description": "Views language morpher",
-  "main": "lib.js",
+  "main": "index.js",
+  "type": "module",
   "bin": {
     "views-morph": "./cli.js"
   },
@@ -40,12 +41,13 @@
   "dependencies": {
     "array-uniq": "^2.0.0",
     "bubblesort": "^1.0.1",
-    "buble": "^0.19.3",
     "chalk": "^2.3.0",
     "chokidar": "^2.0.4",
     "color": "^3.0.0",
     "debounce": "^1.2.0",
+    "delete-empty": "^2.0.0",
     "fast-glob": "^2.2.2",
+    "firstline": "^2.0.2",
     "flatten": "^1.0.2",
     "google-fonts-complete": "^1.1.1",
     "has-yarn": "^1.0.0",
@@ -58,7 +60,6 @@
     "mz": "^2.6.0",
     "prettier": "^1.4.2",
     "read-pkg-up": "^4.0.0",
-    "save": "^2.3.2",
     "svgo": "^1.0.3",
     "to-camel-case": "^1.0.0",
     "to-pascal-case": "^1.0.0",

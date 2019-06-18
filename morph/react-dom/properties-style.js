@@ -184,6 +184,8 @@ let ensurePropName = name => {
     case 'rotateX':
     case 'rotateY':
     case 'scale':
+    case 'scaleX':
+    case 'scaleY':
     case 'translateX':
     case 'translateY':
       return 'transform'
@@ -223,8 +225,8 @@ let asStaticCss = (styles, dynamicStyles = []) =>
 
 let systemScopeToCssKey = {
   isDisabled: 'disabled',
-  isHovered: 'hover',
-  isFocused: 'focus',
+  isHovered: 'hover:enabled',
+  isFocused: 'focus:enabled',
 }
 let ensureSystemScopeCssKey = key => systemScopeToCssKey[key] || key
 
